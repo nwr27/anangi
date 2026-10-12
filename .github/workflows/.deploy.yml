@@ -38,6 +38,7 @@ jobs:
           cp -R dist/. deploy/
           cp -R api/. deploy/api/
 
+      
       - name: Deploy to cPanel via FTPS
         uses: SamKirkland/FTP-Deploy-Action@v4.3.6
         with:
@@ -49,3 +50,6 @@ jobs:
           local-dir: ./deploy/
           server-dir: ./
           dangerous-clean-slate: false
+          concurrency: 1
+          log-level: verbose
+
