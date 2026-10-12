@@ -1,4 +1,4 @@
-import { supabase } from '../../supabase.js'
+import { getSavingUses, getSavingsLedger, getWeeklyChecks, getWeeklyAudit } from '../../services/financeApi.js'
 import { formatRupiah } from '../../utils/format.js'
 import { notifyDataChanged } from '../../utils/events.js'
 import { canWrite, getOwnerId } from '../../utils/auth.js'
@@ -36,7 +36,7 @@ export function savingView() {
         <input type="number" id="amount_use" placeholder="Nominal" required />
         <input type="text" id="note_use" placeholder="Catatan" />
 
-        <button type="submit">Simpan Saving Use</button>
+        <button type="submit" disabled title="Menunggu sinkronisasi MySQL">Simpan Saving Use (belum aktif)</button>
       </form>
     </section>
 
@@ -57,11 +57,8 @@ export function savingView() {
 export async function loadSavings() {
   const savingList = document.querySelector('#savingList')
 
-  const { data, error } = await supabase
-    .from('savings_ledger')
-    .select('*')
-    .eq('owner_id', getOwnerId())
-    .order('date_save', { ascending: false })
+  const data = await getSavingsLedger()
+  const error = null
 
   if (error) {
     savingList.innerHTML = `<p>Gagal ambil saving: ${error.message}</p>`
@@ -84,11 +81,8 @@ export async function loadSavings() {
 export async function loadSavingUses() {
   const savingUseList = document.querySelector('#savingUseList')
 
-  const { data, error } = await supabase
-    .from('saving_uses')
-    .select('*')
-    .eq('owner_id', getOwnerId())
-    .order('date_use', { ascending: false })
+  const data = await getSavingUses()
+  const error = null
 
   if (error) {
     savingUseList.innerHTML = `<p>Gagal ambil saving use: ${error.message}</p>`
@@ -105,9 +99,6 @@ export async function loadSavingUses() {
       <br>
       Periodic: ${item.periodic_date || '-'}
       <br><br>
-      <button class="edit-btn" data-edit-saving-use="${item.id}">
-        Edit
-      </button>
       <button class="danger-btn" data-delete-saving-use="${item.id}">
         Hapus
       </button>
@@ -178,60 +169,10 @@ export async function loadSavingUses() {
 }
 
 export function setupSavingEvents() {
-  const savingUseForm = document.querySelector('#savingUseForm')
-  const loadSaving = document.querySelector('#loadSaving')
-  const loadSavingUsesBtn = document.querySelector('#loadSavingUses')
-
-  savingUseForm.addEventListener('submit', async (e) => {
+  document.querySelector('#savingUseForm')?.addEventListener('submit', e => {
     e.preventDefault()
-
-    if (!canWrite()) return
-
-    const payload = {
-      owner_id: getOwnerId(),
-      date_use: document.querySelector('#date_use').value,
-      from_save: document.querySelector('#from_save').value,
-      to_target: document.querySelector('#to_target').value,
-      amount: Number(document.querySelector('#amount_use').value),
-      note: document.querySelector('#note_use').value,
-    }
-
-    const editId = savingUseForm.dataset.editId
-
-    let error
-
-    if (editId) {
-      const result = await supabase
-        .from('saving_uses')
-        .update(payload)
-        .eq('id', editId)
-        .eq('owner_id', getOwnerId())
-
-      error = result.error
-    } else {
-      const result = await supabase
-        .from('saving_uses')
-        .insert(payload)
-
-      error = result.error
-    }
-
-    if (error) {
-      alert('Gagal simpan saving use: ' + error.message)
-      console.error(error)
-      return
-    }
-
-    alert('Saving use berhasil disimpan')
-
-    savingUseForm.reset()
-    delete savingUseForm.dataset.editId
-    loadSavings()
-    loadSavingUses()
-
-    notifyDataChanged()
+    alert('Input MySQL belum diaktifkan sampai sinkronisasi terakhir selesai.')
   })
-
-  loadSaving.addEventListener('click', loadSavings)
-  loadSavingUsesBtn.addEventListener('click', loadSavingUses)
+  document.querySelector('#loadSaving')?.addEventListener('click', () => loadSavings().catch(console.error))
+  document.querySelector('#loadSavingUses')?.addEventListener('click', () => loadSavingUses().catch(console.error))
 }

@@ -23,3 +23,16 @@ export async function getIncome(id) {
 export function requireFinanceCutover() {
   throw new Error('Input/edit/hapus MySQL belum diaktifkan. Selesaikan sinkronisasi data terakhir terlebih dahulu.')
 }
+
+export async function getSavingUses() {
+  return (await api('/api/saving-uses.php')).saving_uses
+}
+export async function getSavingsLedger() {
+  return (await api('/api/savings-ledger.php')).savings_ledger
+}
+export async function getWeeklyChecks() {
+  return (await api('/api/weekly-checks.php')).weekly_checks
+}
+export async function getWeeklyAudit() {
+  return (await api('/api/periodic.php')).periods
+}

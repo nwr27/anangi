@@ -1,4 +1,4 @@
-import { supabase } from '../../supabase.js'
+import { getSavingUses, getSavingsLedger, getWeeklyChecks, getWeeklyAudit } from '../../services/financeApi.js'
 import { formatRupiah } from '../../utils/format.js'
 import { notifyDataChanged } from '../../utils/events.js'
 import { canWrite, getOwnerId } from '../../utils/auth.js'
@@ -24,7 +24,7 @@ export function weeklyView() {
         <input type="number" id="gopay" placeholder="Gopay / Seabank" />
         <input type="number" id="bca" placeholder="BCA / CIMB Niaga" />
         <input type="text" id="weekly_note" placeholder="Catatan weekly check" />
-        <button type="submit">Simpan Weekly Check</button>
+        <button type="submit" disabled title="Menunggu sinkronisasi MySQL">Simpan Weekly Check (belum aktif)</button>
       </form>
     </section>
 
@@ -50,11 +50,8 @@ export async function loadWeeklyChecks() {
 async function loadWeeklyAudit() {
   const weeklyAuditList = document.querySelector('#weeklyAuditList')
 
-  const { data, error } = await supabase
-    .from('periodic_summary')
-    .select('*')
-    .eq('owner_id', getOwnerId())
-    .order('periodic_date', { ascending: false })
+  const data = await getWeeklyAudit()
+  const error = null
 
   if (error) {
     weeklyAuditList.innerHTML = `<p>Gagal ambil periodic audit: ${error.message}</p>`
@@ -109,11 +106,8 @@ async function loadWeeklyAudit() {
 async function loadWeeklyRawChecks() {
   const weeklyRawList = document.querySelector('#weeklyRawList')
 
-  const { data, error } = await supabase
-    .from('weekly_checks')
-    .select('*')
-    .eq('owner_id', getOwnerId())
-    .order('periodic_date', { ascending: false })
+  const data = await getWeeklyChecks()
+  const error = null
 
   if (error) {
     weeklyRawList.innerHTML = `<p>Gagal ambil raw weekly check: ${error.message}</p>`
@@ -147,125 +141,14 @@ async function loadWeeklyRawChecks() {
     </div>
   `).join('')
 
-  document.querySelectorAll('[data-edit-weekly]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const id = btn.dataset.editWeekly
 
-      const { data, error } = await supabase
-        .from('weekly_checks')
-        .select('*')
-        .eq('id', id)
-        .eq('owner_id', getOwnerId())
-        .single()
-
-      if (error) {
-        alert('Gagal ambil weekly check: ' + error.message)
-        console.error(error)
-        return
-      }
-
-      document.querySelector('#periodic_date').value = data.periodic_date
-      document.querySelector('#cash').value = data.cash
-      document.querySelector('#dana').value = data.dana
-      document.querySelector('#gopay').value = data.gopay
-      document.querySelector('#bca').value = data.bca
-      document.querySelector('#weekly_note').value = data.note || ''
-
-      document.querySelector('#weeklyCheckForm').dataset.editId = id
-    })
-  })
-
-  document.querySelectorAll('[data-delete-weekly]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      if (!canWrite()) return
-
-      const id = btn.dataset.deleteWeekly
-
-      const confirmDelete = confirm('Yakin hapus weekly check ini?')
-      if (!confirmDelete) return
-
-      const { error } = await supabase
-        .from('weekly_checks')
-        .delete()
-        .eq('id', id)
-        .eq('owner_id', getOwnerId())
-
-      if (error) {
-        alert('Gagal hapus weekly check: ' + error.message)
-        console.error(error)
-        return
-      }
-
-      alert('Weekly check berhasil dihapus')
-
-      loadWeeklyChecks()
-      notifyDataChanged()
-    })
-  })
 }
 
 export function setupWeeklyEvents() {
-  const weeklyCheckForm = document.querySelector('#weeklyCheckForm')
-  const loadWeeklyAuditBtn = document.querySelector('#loadWeeklyAudit')
-  const loadWeeklyRawBtn = document.querySelector('#loadWeeklyRaw')
-
-  weeklyCheckForm.addEventListener('submit', async (e) => {
+  document.querySelector('#weeklyCheckForm')?.addEventListener('submit', e => {
     e.preventDefault()
-
-    if (!canWrite()) return
-
-    const periodicDate = document.querySelector('#periodic_date').value
-
-    if (!isWednesday(periodicDate)) {
-      alert('Weekly Check harus menggunakan tanggal Rabu sebagai penutup periode Kamis–Rabu.')
-      return
-    }
-
-    const payload = {
-      owner_id: getOwnerId(),
-      periodic_date: periodicDate,
-      cash: Number(document.querySelector('#cash').value || 0),
-      dana: Number(document.querySelector('#dana').value || 0),
-      gopay: Number(document.querySelector('#gopay').value || 0),
-      bca: Number(document.querySelector('#bca').value || 0),
-      note: document.querySelector('#weekly_note').value,
-    }
-
-    const editId = weeklyCheckForm.dataset.editId
-
-    let error
-
-    if (editId) {
-      const result = await supabase
-        .from('weekly_checks')
-        .update(payload)
-        .eq('id', editId)
-        .eq('owner_id', getOwnerId())
-
-      error = result.error
-    } else {
-      const result = await supabase
-        .from('weekly_checks')
-        .upsert(payload, { onConflict: 'owner_id,periodic_date' })
-
-      error = result.error
-    }
-
-    if (error) {
-      alert('Gagal simpan weekly check: ' + error.message)
-      console.error(error)
-      return
-    }
-
-    alert('Weekly check berhasil disimpan')
-
-    weeklyCheckForm.reset()
-    delete weeklyCheckForm.dataset.editId
-
-    loadWeeklyChecks()
-    notifyDataChanged()
+    alert('Input MySQL belum diaktifkan sampai sinkronisasi terakhir selesai.')
   })
-
-  loadWeeklyAuditBtn.addEventListener('click', loadWeeklyAudit)
-  loadWeeklyRawBtn.addEventListener('click', loadWeeklyRawChecks)
+  document.querySelector('#loadWeeklyAudit')?.addEventListener('click', () => loadWeeklyChecks().catch(console.error))
+  document.querySelector('#loadWeeklyRaw')?.addEventListener('click', () => loadWeeklyChecks().catch(console.error))
 }
