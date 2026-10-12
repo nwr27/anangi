@@ -1,4 +1,4 @@
-import { supabase } from '../../supabase.js'
+import { getExpenses, getExpense, requireFinanceCutover } from '../../services/financeApi.js'
 import { formatRupiah } from '../../utils/format.js'
 import { notifyDataChanged } from '../../utils/events.js'
 import { canWrite, getOwnerId } from '../../utils/auth.js'
@@ -117,17 +117,11 @@ export async function loadExpenses() {
   expensePeriodLabel.textContent =
     `Periode ${formatDisplayDate(start)} - ${formatDisplayDate(end)}`
 
-  const { data, error } = await supabase
-    .from('expenses')
-    .select('*')
-    .eq('owner_id', getOwnerId())
-    .gte('date_expense', startText)
-    .lte('date_expense', endText)
-    .order('date_expense', { ascending: true })
-    .order('created_at', { ascending: true })
-
-  if (error) {
-    expenseList.innerHTML = `<p>Gagal ambil data: ${error.message}</p>`
+  let data
+  try {
+    data = await getExpenses(startText, endText)
+  } catch (error) {
+    expenseList.textContent = `Gagal ambil data: ${error.message}`
     console.error(error)
     return
   }
@@ -289,21 +283,7 @@ function setupExpenseItemEvents() {
 
       if (!confirmDelete) return
 
-      const { error } = await supabase
-        .from('expenses')
-        .delete()
-        .eq('id', id)
-        .eq('owner_id', getOwnerId())
-
-      if (error) {
-        alert('Gagal hapus expense: ' + error.message)
-        console.error(error)
-        return
-      }
-
-      alert('Expense berhasil dihapus')
-      loadExpenses()
-      notifyDataChanged()
+      alert('Penghapusan dinonaktifkan sampai sinkronisasi MySQL selesai.')
     })
   })
 
@@ -311,18 +291,8 @@ function setupExpenseItemEvents() {
     btn.addEventListener('click', async () => {
       const id = btn.dataset.editExpense
 
-      const { data, error } = await supabase
-        .from('expenses')
-        .select('*')
-        .eq('id', id)
-        .eq('owner_id', getOwnerId())
-        .single()
-
-      if (error) {
-        alert('Gagal ambil data expense: ' + error.message)
-        console.error(error)
-        return
-      }
+      alert('Pengeditan dinonaktifkan sampai sinkronisasi MySQL selesai.')
+      return
 
       document.querySelector('#date_expense').value = data.date_expense
       document.querySelector('#expense_name').value = data.expense_name
@@ -355,51 +325,7 @@ export function setupExpenseEvents() {
 
     if (!canWrite()) return
 
-    const payload = {
-      owner_id: getOwnerId(),
-      date_expense: document.querySelector('#date_expense').value,
-      expense_name: document.querySelector('#expense_name').value,
-      code: document.querySelector('#code').value,
-      amount: Number(document.querySelector('#amount').value),
-      periodic_date: getPeriodEndWednesday(document.querySelector('#date_expense').value),
-    }
-
-    const editId = expenseForm.dataset.editId
-
-    let error
-
-    if (editId) {
-      const result = await supabase
-        .from('expenses')
-        .update(payload)
-        .eq('id', editId)
-        .eq('owner_id', getOwnerId())
-
-      error = result.error
-    } else {
-      const result = await supabase
-        .from('expenses')
-        .insert(payload)
-
-      error = result.error
-    }
-
-    if (error) {
-      alert('Gagal simpan expense: ' + error.message)
-      console.error(error)
-      return
-    }
-
-    alert(editId ? 'Expense berhasil diupdate' : 'Expense berhasil disimpan')
-
-    currentWeekStart = getThursdayStart(parseLocalDate(payload.date_expense))
-
-    expenseForm.reset()
-    delete expenseForm.dataset.editId
-    hideExpenseForm()
-
-    loadExpenses()
-    notifyDataChanged()
+    alert('Penyimpanan dinonaktifkan sampai sinkronisasi MySQL selesai.')
   })
 
   prevWeek.addEventListener('click', () => {

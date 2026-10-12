@@ -1,4 +1,4 @@
-import { supabase } from '../../supabase.js'
+import { getIncomes } from '../../services/financeApi.js'
 import { formatRupiah } from '../../utils/format.js'
 import { notifyDataChanged } from '../../utils/events.js'
 import { canWrite, getOwnerId } from '../../utils/auth.js'
@@ -48,14 +48,11 @@ export function incomeView() {
 export async function loadIncomes() {
   const incomeList = document.querySelector('#incomeList')
 
-  const { data, error } = await supabase
-    .from('incomes')
-    .select('*')
-    .eq('owner_id', getOwnerId())
-    .order('date_income', { ascending: false })
-
-  if (error) {
-    incomeList.innerHTML = `<p>Gagal ambil income: ${error.message}</p>`
+  let data
+  try {
+    data = await getIncomes()
+  } catch (error) {
+    incomeList.textContent = `Gagal ambil income: ${error.message}`
     console.error(error)
     return
   }
@@ -88,38 +85,15 @@ export async function loadIncomes() {
 
       if (!confirmDelete) return
 
-      const { error } = await supabase
-        .from('incomes')
-        .delete()
-        .eq('id', id)
-        .eq('owner_id', getOwnerId())
-
-      if (error) {
-        alert('Gagal hapus income: ' + error.message)
-        console.error(error)
-        return
-      }
-
-      alert('Income berhasil dihapus')
-      loadIncomes()
+      alert('Penghapusan dinonaktifkan sampai sinkronisasi MySQL selesai.')
     })
   })
   document.querySelectorAll('[data-edit-income]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const id = btn.dataset.editIncome
 
-      const { data, error } = await supabase
-        .from('incomes')
-        .select('*')
-        .eq('id', id)
-        .eq('owner_id', getOwnerId())
-        .single()
-
-      if (error) {
-        alert('Gagal ambil income: ' + error.message)
-        console.error(error)
-        return
-      }
+      alert('Pengeditan dinonaktifkan sampai sinkronisasi MySQL selesai.')
+      return
 
       document.querySelector('#date_income').value = data.date_income
       document.querySelector('#amount_income').value = data.amount
@@ -140,46 +114,7 @@ export function setupIncomeEvents() {
 
     if (!canWrite()) return
 
-    const payload = {
-      owner_id: getOwnerId(),
-      date_income: document.querySelector('#date_income').value,
-      amount: Number(document.querySelector('#amount_income').value),
-      note: document.querySelector('#note_income').value,
-      allocation_type: document.querySelector('#allocation_type').value,
-      periodic_date: getPeriodEndWednesday(document.querySelector('#date_income').value),
-    }
-
-    const editId = incomeForm.dataset.editId
-
-    let error
-
-    if (editId) {
-      const result = await supabase
-        .from('incomes')
-        .update(payload)
-        .eq('id', editId)
-        .eq('owner_id', getOwnerId())
-
-      error = result.error
-    } else {
-      const result = await supabase
-        .from('incomes')
-        .insert(payload)
-
-      error = result.error
-    }
-
-    if (error) {
-      alert('Gagal simpan income: ' + error.message)
-      console.error(error)
-      return
-    }
-
-    alert('Income berhasil disimpan')
-    incomeForm.reset()
-    delete incomeForm.dataset.editId
-    loadIncomes()
-    notifyDataChanged()
+    alert('Penyimpanan dinonaktifkan sampai sinkronisasi MySQL selesai.')
   })
 
   loadIncome.addEventListener('click', loadIncomes)

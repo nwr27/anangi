@@ -1,0 +1,25 @@
+async function api(path, options = {}) {
+  const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store', ...options })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`)
+  return data
+}
+export async function getExpenses(from, to) {
+  const query = new URLSearchParams({ from, to })
+  return (await api(`/api/expenses.php?${query}`)).expenses
+}
+export async function getExpense(id) {
+  const query = new URLSearchParams({ id })
+  return (await api(`/api/expenses.php?${query}`)).expenses[0] || null
+}
+export async function getIncomes() {
+  return (await api('/api/incomes.php')).incomes
+}
+export async function getIncome(id) {
+  const query = new URLSearchParams({ id })
+  return (await api(`/api/incomes.php?${query}`)).incomes[0] || null
+}
+// Writes are deliberately disabled until the final Supabase-to-MySQL cutover.
+export function requireFinanceCutover() {
+  throw new Error('Input/edit/hapus MySQL belum diaktifkan. Selesaikan sinkronisasi data terakhir terlebih dahulu.')
+}
