@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { supabase } from '../supabase.js'
 import { formatRupiah } from '../utils/format.js'
 import styles from './Dashboard.module.css'
-import { getOwnerId } from '../utils/auth.js'
 
 function SummaryCard({ label, value, className = '' }) {
   return (
@@ -33,77 +31,35 @@ export default function Dashboard({ onLogout, currentUser }) {
   const [weeklyError, setWeeklyError] = useState('')
   const [weeklyExpenseBreakdown, setWeeklyExpenseBreakdown] = useState({ total: 0, nmi: 0, fm: 0, personal: 0 })
 
-  const loadRealtimeSummary = useCallback(async () => {
-    setSummaryError('')
-    const ownerId = getOwnerId()
-    if (!ownerId) return
-    const [{ data, error }, expensesResult] = await Promise.all([
-      supabase.from('realtime_summary').select('*').eq('owner_id', ownerId).maybeSingle(),
-      supabase.from('expenses').select('code, amount').eq('owner_id', ownerId),
-    ])
-
-    if (error) {
-      console.error(error)
-      setSummaryError(`Gagal ambil realtime summary: ${error.message}`)
-      return
-    }
-
-    setSummary(data)
-    const expenses = expensesResult.data || []
-    const grouped = expenses.reduce((acc, item) => {
-      const code = item.code || 'UNKNOWN'
-      acc[code] = (acc[code] || 0) + Number(item.amount || 0)
-      return acc
-    }, {})
-    const totalExpense = expenses.reduce((sum, item) => sum + Number(item.amount || 0), 0)
-    const nmiExpense = expenses.filter(item => String(item.code || '').trim().toUpperCase() === 'NMI').reduce((sum, item) => sum + Number(item.amount || 0), 0)
-    const fmExpense = expenses.filter(item => String(item.code || '').trim().toUpperCase() === 'FM').reduce((sum, item) => sum + Number(item.amount || 0), 0)
-    setExpenseBreakdown({ total: totalExpense, nmi: nmiExpense, fm: fmExpense, personal: totalExpense - nmiExpense - fmExpense })
-    const sorted = Object.entries(grouped).sort((a, b) => b[1] - a[1])
-    setTopCode(sorted.length ? { code: sorted[0][0], total: sorted[0][1] } : { code: 'Code', total: 0 })
-  }, [])
-
-  const loadWeeklySummary = useCallback(async () => {
-    setWeeklyError('')
-    const ownerId = getOwnerId()
-    if (!ownerId) return
-    const { data, error } = await supabase
-      .from('periodic_summary')
-      .select('*')
-      .eq('owner_id', ownerId)
-      .order('periodic_date', { ascending: false })
-      .range(weeklyOffset, weeklyOffset)
-
-    if (error) {
-      console.error(error)
-      setWeeklyError(`Gagal ambil weekly summary: ${error.message}`)
-      return
-    }
-    const selectedWeekly = data?.[0] || null
-    setWeekly(selectedWeekly)
-    if (!selectedWeekly) {
-      setWeeklyExpenseBreakdown({ total: 0, nmi: 0, fm: 0, personal: 0 })
-      return
-    }
-    const { data: weekExpenses, error: weekExpenseError } = await supabase
-      .from('expenses')
-      .select('code, amount')
-      .eq('owner_id', ownerId)
-      .eq('periodic_date', selectedWeekly.periodic_date)
-    if (weekExpenseError) {
-      console.error(weekExpenseError)
-      return
-    }
-    const items = weekExpenses || []
-    const total = items.reduce((sum, item) => sum + Number(item.amount || 0), 0)
-    const nmi = items.filter(item => String(item.code || '').trim().toUpperCase() === 'NMI').reduce((sum, item) => sum + Number(item.amount || 0), 0)
-    const fm = items.filter(item => String(item.code || '').trim().toUpperCase() === 'FM').reduce((sum, item) => sum + Number(item.amount || 0), 0)
-    setWeeklyExpenseBreakdown({ total, nmi, fm, personal: total - nmi - fm })
-  }, [weeklyOffset])
+  const [periods, setPeriods] = useState([])
+  const [expenseStats, setExpenseStats] = useState([])
 
   const refresh = useCallback(async () => {
-    await Promise.all([loadRealtimeSummary(), loadWeeklySummary()])
-  }, [loadRealtimeSummary, loadWeeklySummary])
+    setSummaryError('')
+    setWeeklyError('')
+    try {
+      const [dashboardResponse, periodicResponse] = await Promise.all([
+        fetch('/api/dashboard.php', { credentials: 'same-origin', cache: 'no-store' }),
+        fetch('/api/periodic.php', { credentials: 'same-origin', cache: 'no-store' }),
+      ])
+      if (!dashboardResponse.ok || !periodicResponse.ok) {
+        throw new Error(`Dashboard HTTP ${dashboardResponse.status}, Periodic HTTP ${periodicResponse.status}`)
+      }
+      const [dashboard, periodic] = await Promise.all([
+        dashboardResponse.json(), periodicResponse.json(),
+      ])
+      if (dashboard.status !== 'ok' || periodic.status !== 'ok') {
+        throw new Error('Respons API tidak valid')
+      }
+      setSummary(dashboard.summary)
+      setPeriods(periodic.periods || [])
+      setExpenseStats(dashboard.expense_stats || [])
+    } catch (error) {
+      console.error(error)
+      setSummaryError(`Gagal mengambil data MySQL: ${error.message}`)
+      setWeeklyError('Gagal mengambil audit mingguan.')
+    }
+  }, [])
 
   useEffect(() => { refresh() }, [refresh])
 
@@ -113,19 +69,44 @@ export default function Dashboard({ onLogout, currentUser }) {
     return () => window.removeEventListener('finance:data-changed', handleDataChanged)
   }, [refresh])
 
-  async function openCodeStats() {
-    setModalOpen(true)
-    const ownerId = getOwnerId()
-    if (!ownerId) return
-    const { data, error } = await supabase.from('expenses').select('code, amount').eq('owner_id', ownerId)
-    if (error) {
-      setCodeStats([{ code: 'ERROR', total: 0, percentage: error.message }])
-      return
-    }
-    const totalExpense = (data || []).reduce((sum, item) => sum + Number(item.amount || 0), 0)
-    const grouped = (data || []).reduce((acc, item) => {
+  useEffect(() => {
+    const selected = periods[weeklyOffset] || null
+    setWeekly(selected)
+  }, [periods, weeklyOffset])
+
+  const calculateBreakdown = useCallback((items) => {
+    const total = items.reduce((sum, item) => sum + Number(item.total || 0), 0)
+    const nmi = items.filter(item => String(item.code || '').trim().toUpperCase() === 'NMI')
+      .reduce((sum, item) => sum + Number(item.total || 0), 0)
+    const fm = items.filter(item => String(item.code || '').trim().toUpperCase() === 'FM')
+      .reduce((sum, item) => sum + Number(item.total || 0), 0)
+    return { total, nmi, fm, personal: total - nmi - fm }
+  }, [])
+
+  useEffect(() => {
+    setExpenseBreakdown(calculateBreakdown(expenseStats))
+    const grouped = expenseStats.reduce((acc, item) => {
       const code = item.code || 'UNKNOWN'
-      acc[code] = (acc[code] || 0) + Number(item.amount || 0)
+      acc[code] = (acc[code] || 0) + Number(item.total || 0)
+      return acc
+    }, {})
+    const sorted = Object.entries(grouped).sort((a, b) => b[1] - a[1])
+    setTopCode(sorted.length ? { code: sorted[0][0], total: sorted[0][1] } : { code: 'Code', total: 0 })
+  }, [expenseStats, calculateBreakdown])
+
+  useEffect(() => {
+    const selected = periods[weeklyOffset] || null
+    setWeeklyExpenseBreakdown(calculateBreakdown(
+      selected ? expenseStats.filter(item => item.periodic_date === selected.periodic_date) : []
+    ))
+  }, [expenseStats, periods, weeklyOffset, calculateBreakdown])
+
+  function openCodeStats() {
+    setModalOpen(true)
+    const totalExpense = expenseStats.reduce((sum, item) => sum + Number(item.total || 0), 0)
+    const grouped = expenseStats.reduce((acc, item) => {
+      const code = item.code || 'UNKNOWN'
+      acc[code] = (acc[code] || 0) + Number(item.total || 0)
       return acc
     }, {})
     setCodeStats(Object.entries(grouped).sort((a, b) => b[1] - a[1]).map(([code, total]) => ({
@@ -196,7 +177,7 @@ export default function Dashboard({ onLogout, currentUser }) {
           <h3>Ringkasan Audit Mingguan</h3>
           <div className={styles.weeklyNav}>
             <button onClick={() => setWeeklyOffset(v => Math.max(0, v - 1))} disabled={weeklyOffset === 0}>↑</button>
-            <button onClick={() => setWeeklyOffset(v => v + 1)}>↓</button>
+            <button onClick={() => setWeeklyOffset(v => Math.min(periods.length - 1, v + 1))} disabled={weeklyOffset >= periods.length - 1}>↓</button>
           </div>
         </div>
         {weeklyError && <p>{weeklyError}</p>}

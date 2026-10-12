@@ -57,11 +57,23 @@ try {
   $stmt->execute([$owner]);
   $weekly = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+  // Agregasi pengeluaran untuk kartu Dashboard dan rincian per periode.
+  // Data tetap dibatasi oleh owner dari session PHP.
+  $stmt = $pdo->prepare(
+    'SELECT periodic_date, code, SUM(amount) AS total
+     FROM expenses
+     WHERE owner_id = ?
+     GROUP BY periodic_date, code'
+  );
+  $stmt->execute([$owner]);
+  $expenseStats = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
   echo json_encode([
     'status' => 'ok',
     'owner_id' => $owner,
     'summary' => $summary,
-    'weekly' => $weekly
+    'weekly' => $weekly,
+    'expense_stats' => $expenseStats
   ], JSON_THROW_ON_ERROR);
 } catch (Throwable $e) {
   error_log(
