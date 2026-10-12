@@ -66,3 +66,21 @@ function financeText($value, int $max, bool $required = false): string {
     if (strlen($value) > $max) financeJson(422, ['error'=>'Teks terlalu panjang']);
     return $value;
 }
+
+// Serialize balance-affecting writes per owner using an existing, stable user row.
+function financeLockOwner(PDO $pdo, string $owner): void {
+    $stmt = $pdo->prepare('SELECT owner_id FROM app_users WHERE owner_id=? FOR UPDATE');
+    $stmt->execute([$owner]);
+    if (!$stmt->fetchColumn()) throw new RuntimeException('Owner not found');
+}
+function financeAssertSavingsNonnegative(PDO $pdo, string $owner): void {
+    $stmt=$pdo->prepare("SELECT type_save, SUM(amount) AS total FROM savings_ledger WHERE owner_id=? AND type_save IN ('nest_egg','wedding','umrah','piggy','trading') GROUP BY type_save HAVING SUM(amount)<0");
+    $stmt->execute([$owner]);
+    $negative=$stmt->fetch(PDO::FETCH_ASSOC);
+    if ($negative) {
+        $names=['nest_egg'=>'Nest Egg','wedding'=>'Wedding','umrah'=>'Umrah','piggy'=>'Piggy','trading'=>'Trading'];
+        $label=$names[$negative['type_save']] ?? $negative['type_save'];
+        // Caller must roll back before returning a response.
+        throw new DomainException('Saldo '.$label.' tidak mencukupi. Transaksi dibatalkan.');
+    }
+}

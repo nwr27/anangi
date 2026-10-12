@@ -18,8 +18,7 @@ try {
     $id=$method==='POST'?financeNewUuid():financeUuid($body['id']??null);
     // Serialize concurrent modifications for the same owner, including savings-use updates.
     $pdo->beginTransaction();
-    $lockOwner=$pdo->prepare('SELECT id FROM incomes WHERE owner_id=? ORDER BY id LIMIT 1 FOR UPDATE');
-    $lockOwner->execute([$owner]);
+    financeLockOwner($pdo,$owner);
     if ($method!=='POST') {
         $stmt=$pdo->prepare('SELECT id FROM saving_uses WHERE id=? AND owner_id=? FOR UPDATE');
         $stmt->execute([$id,$owner]);
@@ -52,7 +51,11 @@ try {
         $balance=$pdo->prepare('INSERT INTO balance_allocations (id,source_id,date_allocation,amount,note,periodic_date,created_at,owner_id) VALUES (?,?,?,?,?,?,NOW(6),?)');
         $balance->execute([financeNewUuid(),$id,$date,$amount,'saving use - '.$from.' to balance',$period,$owner]);
     }
+    financeAssertSavingsNonnegative($pdo,$owner);
     $pdo->commit();financeJson(200,['status'=>'ok','id'=>$id]);
+} catch (DomainException $e) {
+    if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
+    financeJson(422,['error'=>$e->getMessage()]);
 } catch (Throwable $e) {
     if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
     error_log('Anangi saving-uses: '.$e->getMessage());financeJson(500,['error'=>'Internal server error']);

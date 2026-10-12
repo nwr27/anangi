@@ -46,6 +46,7 @@ try {
     $body=financeBody();$id=$method==='POST'?financeNewUuid():financeUuid($body['id']??null);
     // All changes to income and its allocations must commit atomically.
     $pdo->beginTransaction();
+    financeLockOwner($pdo,$owner);
     if ($method!=='POST') {
         $lock=$pdo->prepare('SELECT id FROM incomes WHERE id=? AND owner_id=? FOR UPDATE');$lock->execute([$id,$owner]);
         if (!$lock->fetchColumn()) {$pdo->rollBack();financeJson(404,['error'=>'Income tidak ditemukan']);}
@@ -71,7 +72,11 @@ try {
         }
         incomeAllocation($pdo,$owner,$id,$date,$period,$amount,$note,$type);
     }
+    financeAssertSavingsNonnegative($pdo,$owner);
     $pdo->commit();financeJson(200,['status'=>'ok','id'=>$id]);
+} catch (DomainException $e) {
+    if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
+    financeJson(422,['error'=>$e->getMessage()]);
 } catch (Throwable $e) {
     if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
     error_log('Anangi incomes: '.$e->getMessage());financeJson(500,['error'=>'Internal server error']);
