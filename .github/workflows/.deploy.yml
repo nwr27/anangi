@@ -34,8 +34,9 @@ jobs:
 
       - name: Prepare deployment
         run: |
-          mkdir -p deploy
+          mkdir -p deploy/api
           cp -R dist/. deploy/
+          cp -R api/. deploy/api/
 
       - name: Deploy to cPanel via FTPS
         uses: SamKirkland/FTP-Deploy-Action@v4.3.6

@@ -29,3 +29,7 @@ Finance_Tracker_Maintenance_Troubleshooting_Guide.docx
 .env.local
 
 .venv
+
+server-config/database.php
+api/error_log
+api/**/error_log
