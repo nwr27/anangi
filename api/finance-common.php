@@ -73,14 +73,30 @@ function financeLockOwner(PDO $pdo, string $owner): void {
     $stmt->execute([$owner]);
     if (!$stmt->fetchColumn()) throw new RuntimeException('Owner not found');
 }
+function financeRoundedRupiah(string $amount): int {
+    // Exact decimal-to-integer conversion; no floating point.
+    if (!preg_match('/^(\d{1,15})(?:\.(\d{1,2}))?$/D', $amount, $m)) {
+        throw new DomainException('Nominal Income maksimal 15 digit rupiah');
+    }
+    $whole=(int)$m[1];
+    $fraction=str_pad($m[2] ?? '',2,'0');
+    return $whole + ((int)$fraction >= 50 ? 1 : 0);
+}
 function financeAssertSavingsNonnegative(PDO $pdo, string $owner): void {
-    $stmt=$pdo->prepare("SELECT type_save, SUM(amount) AS total FROM savings_ledger WHERE owner_id=? AND type_save IN ('nest_egg','wedding','umrah','piggy','trading') GROUP BY type_save HAVING SUM(amount)<0");
+    // Check each historical date, not only the latest balance.
+    // Aggregate by date first; window SUM detects a negative balance at any point in time.
+    $stmt=$pdo->prepare("SELECT type_save, date_save, running_balance FROM (
+      SELECT type_save, date_save,
+        SUM(SUM(amount)) OVER (PARTITION BY type_save ORDER BY date_save ROWS UNBOUNDED PRECEDING) AS running_balance
+      FROM savings_ledger
+      WHERE owner_id=? AND type_save IN ('nest_egg','wedding','umrah','piggy','trading')
+      GROUP BY type_save,date_save
+    ) history WHERE running_balance < 0 ORDER BY date_save ASC LIMIT 1");
     $stmt->execute([$owner]);
     $negative=$stmt->fetch(PDO::FETCH_ASSOC);
     if ($negative) {
         $names=['nest_egg'=>'Nest Egg','wedding'=>'Wedding','umrah'=>'Umrah','piggy'=>'Piggy','trading'=>'Trading'];
         $label=$names[$negative['type_save']] ?? $negative['type_save'];
-        // Caller must roll back before returning a response.
-        throw new DomainException('Saldo '.$label.' tidak mencukupi. Transaksi dibatalkan.');
+        throw new DomainException('Saldo '.$label.' menjadi negatif pada '.$negative['date_save'].'. Transaksi dibatalkan.');
     }
 }

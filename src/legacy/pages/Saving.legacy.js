@@ -59,24 +59,22 @@ export async function loadSavings() {
   const savingList = document.querySelector('#savingList')
 
   const data = await getSavingsLedger()
-  const error = null
-
-  if (error) {
-    savingList.innerHTML = `<p>Gagal ambil saving: ${error.message}</p>`
-    console.error(error)
-    return
+  savingList.replaceChildren()
+  if (!data.length) { savingList.textContent = 'Belum ada saving ledger.'; return }
+  for (const item of data) {
+    const row = document.createElement('div')
+    row.className = 'item'
+    const name = document.createElement('b')
+    name.textContent = item.type_save
+    const details = document.createElement('div')
+    details.textContent = `${item.date_save} | ${formatRupiah(item.amount)}`
+    const note = document.createElement('div')
+    note.textContent = `Note: ${item.note || '-'}`
+    const period = document.createElement('div')
+    period.textContent = `Periodic: ${item.periodic_date || '-'}`
+    row.append(name, details, note, period)
+    savingList.append(row)
   }
-
-  savingList.innerHTML = data.map(item => `
-    <div class="item">
-      <b>${item.type_save}</b><br>
-      ${item.date_save} | ${formatRupiah(item.amount)}
-      <br>
-      Note: ${item.note || '-'}
-      <br>
-      Periodic: ${item.periodic_date || '-'}
-    </div>
-  `).join('')
 }
 
 let savingCache = []

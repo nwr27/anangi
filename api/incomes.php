@@ -6,7 +6,7 @@ if (!in_array($method,['GET','POST','PUT','DELETE'],true)) financeJson(405,['err
 if ($method!=='GET') { financeRequireSameOrigin(); }
 function incomeAllocation(PDO $pdo,string $owner,string $id,string $date,string $period,string $amount,string $note,string $type): void {
     // Same as PostgreSQL round(amount)::bigint for positive numeric values.
-    $whole=(int)round((float)$amount,0,PHP_ROUND_HALF_UP);
+    $whole=financeRoundedRupiah($amount);
     if ($whole<=0) financeJson(422,['error'=>'Nominal harus minimal Rp1 setelah pembulatan']);
     $rows=[];$balance=null;
     if ($type==='auto') {
