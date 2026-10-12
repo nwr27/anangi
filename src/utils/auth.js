@@ -1,50 +1,54 @@
-const NANA_PASSCODE = import.meta.env.VITE_NANA_PASSCODE
-const MEYSA_PASSCODE = import.meta.env.VITE_MEYSA_PASSCODE
-
 const USERS = {
   nana: { id: 'nana', name: 'NANA' },
   meysa: { id: 'meysa', name: 'MEYSA' },
 }
 
-export function isLoggedIn() {
-  return Boolean(getCurrentUser())
+let currentUser = null
+
+async function request(url, options = {}) {
+  const response = await fetch(url, {
+    credentials: 'same-origin',
+    cache: 'no-store',
+    ...options,
+  })
+  const body = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(body.error || `HTTP ${response.status}`)
+  }
+  return body
 }
 
-export function login(passcode) {
-  let user = null
-
-  if (passcode === NANA_PASSCODE) user = USERS.nana
-  else if (passcode === MEYSA_PASSCODE) user = USERS.meysa
-
-  if (!user) return false
-
-  localStorage.setItem('finance_passcode_ok', 'true')
-  localStorage.setItem('finance_user', JSON.stringify(user))
-  localStorage.removeItem('finance_access_mode')
-  return true
-}
-
-export function logout() {
-  localStorage.removeItem('finance_passcode_ok')
-  localStorage.removeItem('finance_user')
-  localStorage.removeItem('finance_access_mode')
-}
-
-export function getCurrentUser() {
+export async function checkSession() {
   try {
-    const raw = localStorage.getItem('finance_user')
-    if (!raw) return null
-    const user = JSON.parse(raw)
-    return USERS[user?.id] || null
+    const body = await request('/api/auth/session.php')
+    currentUser = body.authenticated ? USERS[body.owner_id] || null : null
   } catch {
-    return null
+    currentUser = null
+  }
+  return currentUser
+}
+
+export async function login(ownerId, password) {
+  const body = await request('/api/auth/login.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ owner_id: ownerId, username: ownerId, password }),
+  })
+  // Validate the actual PHP session rather than trusting the login response.
+  const user = await checkSession()
+  if (!user) throw new Error(body.error || 'Login belum menghasilkan session aktif')
+  return user
+}
+
+export async function logout() {
+  try {
+    await request('/api/auth/logout.php', { method: 'POST' })
+  } finally {
+    currentUser = null
   }
 }
 
-export function getOwnerId() {
-  return getCurrentUser()?.id || null
-}
-
-export function canWrite() {
-  return isLoggedIn()
-}
+export function getCurrentUser() { return currentUser }
+export function getOwnerId() { return currentUser?.id || null }
+export function isLoggedIn() { return Boolean(currentUser) }
+export function canWrite() { return Boolean(currentUser) }

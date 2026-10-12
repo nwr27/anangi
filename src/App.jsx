@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import styles from './App.module.css'
 import Navbar from './components/Navbar.jsx'
 import Dashboard from './pages/Dashboard.jsx'
@@ -7,44 +7,72 @@ import Income from './pages/Income.jsx'
 import Saving from './pages/Saving.jsx'
 import Weekly from './pages/Weekly.jsx'
 import ExpenseAnalysis from './pages/ExpenseAnalysis.jsx'
-import { getCurrentUser, isLoggedIn, login, logout } from './utils/auth.js'
+import { checkSession, login, logout } from './utils/auth.js'
 
 export default function App() {
-  const [loggedIn, setLoggedIn] = useState(isLoggedIn())
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [currentUser, setCurrentUser] = useState(null)
+  const [ownerId, setOwnerId] = useState('nana')
+  const [password, setPassword] = useState('')
   const [page, setPage] = useState('dashboard')
-  const [currentUser, setCurrentUser] = useState(getCurrentUser())
   const [error, setError] = useState('')
   const [quickAddToken, setQuickAddToken] = useState(0)
 
-  function handlePasscode(e) {
-    const value = e.target.value
-    if (value.length < 4) return
-    if (!login(value)) {
-      setError('Passcode salah')
-      e.target.value = ''
-      setTimeout(() => setError(''), 1500)
-      return
+  useEffect(() => {
+    let mounted = true
+    checkSession().then(user => {
+      if (mounted) { setCurrentUser(user); setLoading(false) }
+    })
+    return () => { mounted = false }
+  }, [])
+
+  async function handleLogin(event) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      const user = await login(ownerId, password)
+      setCurrentUser(user)
+      setPassword('')
+    } catch (err) {
+      setError(err.message || 'Login gagal')
+    } finally {
+      setBusy(false)
     }
-    setCurrentUser(getCurrentUser())
-    setLoggedIn(true)
   }
 
-  function handleLogout() {
-    logout()
-    setCurrentUser(null)
-    setLoggedIn(false)
-    setPage('dashboard')
+  async function handleLogout() {
+    setBusy(true)
+    try {
+      await logout()
+    } catch (err) {
+      console.error('Logout API:', err)
+    } finally {
+      setCurrentUser(null)
+      setPage('dashboard')
+      setBusy(false)
+    }
   }
 
-  if (!loggedIn) {
+  if (loading) return <div className={styles.loginShell}>Memeriksa sesi...</div>
+
+  if (!currentUser) {
     return (
       <div className={styles.loginShell}>
-        <section className={styles.loginCard}>
+        <form className={styles.loginCard} onSubmit={handleLogin}>
           <h1>Anangi App</h1>
-          <p>Masukkan passcode</p>
-          <input autoFocus type="password" placeholder="••••" maxLength="4" inputMode="numeric" onInput={handlePasscode} />
-          <p className={styles.loginError}>{error}</p>
-        </section>
+          <p>Masuk menggunakan akun Anangi</p>
+          <label htmlFor="owner">Akun</label>
+          <select id="owner" value={ownerId} onChange={e => setOwnerId(e.target.value)} disabled={busy}>
+            <option value="nana">NANA</option>
+            <option value="meysa">MEYSA</option>
+          </select>
+          <label htmlFor="password">Password</label>
+          <input id="password" type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required disabled={busy} />
+          <button type="submit" disabled={busy}>{busy ? 'Memproses...' : 'Masuk'}</button>
+          <p role="alert" className={styles.loginError}>{error}</p>
+        </form>
       </div>
     )
   }
@@ -60,11 +88,8 @@ export default function App() {
 
   return (
     <div className={styles.appContainer}>
-      <Navbar
-        page={page}
-        onNavigate={setPage}
-        onQuickExpense={() => { setPage('expense'); setQuickAddToken(v => v + 1) }}
-      />
+      <Navbar page={page} onNavigate={setPage}
+        onQuickExpense={() => { setPage('expense'); setQuickAddToken(v => v + 1) }} />
       {pages[page]}
     </div>
   )

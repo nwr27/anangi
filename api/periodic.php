@@ -1,7 +1,5 @@
+
 <?php
-
-declare(strict_types=1);
-
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
@@ -15,28 +13,37 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
   exit;
 }
 
-$owner = requireAnangiUser();
-
 try {
+  startAnangiSession();
+
+  $owner = $_SESSION['owner_id'] ?? null;
+
+  if (!in_array($owner, ['nana', 'meysa'], true)) {
+    http_response_code(401);
+    echo json_encode(['error' => 'Unauthorized']);
+    exit;
+  }
+
   $pdo = getDatabase();
 
-  $stmt = $pdo->prepare("
-        SELECT *
-        FROM periodic_summary
-        WHERE owner_id = :owner
-        ORDER BY periodic_date DESC
-        LIMIT 52
-    ");
+  $stmt = $pdo->prepare(
+    'SELECT *
+         FROM periodic_summary
+         WHERE owner_id = ?
+         ORDER BY periodic_date DESC
+         LIMIT 52'
+  );
 
-  $stmt->execute(['owner' => $owner]);
+  $stmt->execute([$owner]);
 
   echo json_encode([
     'status' => 'ok',
     'owner_id' => $owner,
-    'periods' => $stmt->fetchAll()
+    'periods' => $stmt->fetchAll(PDO::FETCH_ASSOC)
   ], JSON_THROW_ON_ERROR);
 } catch (Throwable $e) {
   error_log('Anangi periodic: ' . $e->getMessage());
+
   http_response_code(500);
   echo json_encode(['error' => 'Internal server error']);
 }

@@ -1,7 +1,5 @@
+
 <?php
-
-declare(strict_types=1);
-
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
@@ -15,10 +13,16 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
   exit;
 }
 
-$owner = requireAnangiUser();
-
 try {
-  $pdo = getDatabase();
+  startAnangiSession();
+
+  $owner = $_SESSION['owner_id'] ?? null;
+
+  if (!in_array($owner, ['nana', 'meysa'], true)) {
+    http_response_code(401);
+    echo json_encode(['error' => 'Unauthorized']);
+    exit;
+  }
 
   $limit = filter_var(
     $_GET['limit'] ?? 50,
@@ -30,31 +34,27 @@ try {
     ]]
   );
 
-  $stmt = $pdo->prepare("
-        SELECT
-            owner_id,
-            transaction_date,
-            transaction_type,
-            title,
-            category,
-            amount,
-            periodic_date,
-            created_at
-        FROM transaction_history
-        WHERE owner_id = :owner
-        ORDER BY transaction_date DESC, created_at DESC
-        LIMIT $limit
-    ");
+  $pdo = getDatabase();
 
-  $stmt->execute(['owner' => $owner]);
+  $stmt = $pdo->prepare(
+    "SELECT owner_id, transaction_date, transaction_type,
+                title, category, amount, periodic_date, created_at
+         FROM transaction_history
+         WHERE owner_id = ?
+         ORDER BY transaction_date DESC, created_at DESC
+         LIMIT $limit"
+  );
+
+  $stmt->execute([$owner]);
 
   echo json_encode([
     'status' => 'ok',
     'owner_id' => $owner,
-    'transactions' => $stmt->fetchAll()
+    'transactions' => $stmt->fetchAll(PDO::FETCH_ASSOC)
   ], JSON_THROW_ON_ERROR);
 } catch (Throwable $e) {
   error_log('Anangi transactions: ' . $e->getMessage());
+
   http_response_code(500);
   echo json_encode(['error' => 'Internal server error']);
 }

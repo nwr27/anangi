@@ -1,6 +1,5 @@
 
 <?php
-
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
@@ -17,23 +16,25 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
   exit;
 }
 
-
-startAnangiSession();
-
-echo json_encode([
-  'session_name' => session_name(),
-  'cookie_received' => isset($_COOKIE[session_name()]),
-  'session_active' => session_status() === PHP_SESSION_ACTIVE,
-  'owner_id' => $_SESSION['owner_id'] ?? null,
-]);
-
-exit;
-
-
 try {
+  // Autentikasi
+  startAnangiSession();
+
+  $owner = $_SESSION['owner_id'] ?? null;
+
+  if (!in_array($owner, ['nana', 'meysa'], true)) {
+    http_response_code(401);
+
+    echo json_encode([
+      'error' => 'Unauthorized'
+    ]);
+    exit;
+  }
+
+  // Database
   $pdo = getDatabase();
 
-  // Ambil ringkasan saldo
+  // Ringkasan saldo
   $stmt = $pdo->prepare(
     'SELECT *
          FROM realtime_summary
@@ -42,9 +43,9 @@ try {
   );
 
   $stmt->execute([$owner]);
-  $summary = $stmt->fetch() ?: null;
+  $summary = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
 
-  // Ambil audit mingguan
+  // Audit mingguan
   $stmt = $pdo->prepare(
     'SELECT *
          FROM weekly_summary
@@ -54,7 +55,7 @@ try {
   );
 
   $stmt->execute([$owner]);
-  $weekly = $stmt->fetchAll();
+  $weekly = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
   echo json_encode([
     'status' => 'ok',
@@ -63,7 +64,14 @@ try {
     'weekly' => $weekly
   ], JSON_THROW_ON_ERROR);
 } catch (Throwable $e) {
-  error_log('Anangi dashboard: ' . $e->getMessage());
+  error_log(
+    'Anangi dashboard: ' .
+      $e->getMessage() .
+      ' in ' .
+      $e->getFile() .
+      ':' .
+      $e->getLine()
+  );
 
   http_response_code(500);
 
