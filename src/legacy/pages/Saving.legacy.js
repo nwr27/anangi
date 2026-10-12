@@ -1,7 +1,6 @@
-import { getSavingUses, getSavingsLedger, getWeeklyChecks, getWeeklyAudit } from '../../services/financeApi.js'
+import { getSavingUses, getSavingsLedger, createSavingUse, updateSavingUse, deleteSavingUse } from '../../services/financeApi.js'
 import { formatRupiah } from '../../utils/format.js'
 import { notifyDataChanged } from '../../utils/events.js'
-import { canWrite, getOwnerId } from '../../utils/auth.js'
 
 function formatDate(date) {
   const year = date.getFullYear()
@@ -36,7 +35,9 @@ export function savingView() {
         <input type="number" id="amount_use" placeholder="Nominal" required />
         <input type="text" id="note_use" placeholder="Catatan" />
 
-        <button type="submit" disabled title="Menunggu sinkronisasi MySQL">Simpan Saving Use (belum aktif)</button>
+        <button type="submit" >Simpan Saving Use</button>
+        <button type="button" id="cancelSavingEdit" hidden>Batal Edit</button>
+        <p id="savingStatus" role="status"></p>
       </form>
     </section>
 
@@ -78,100 +79,67 @@ export async function loadSavings() {
   `).join('')
 }
 
-export async function loadSavingUses() {
-  const savingUseList = document.querySelector('#savingUseList')
-
-  const data = await getSavingUses()
-  const error = null
-
-  if (error) {
-    savingUseList.innerHTML = `<p>Gagal ambil saving use: ${error.message}</p>`
-    console.error(error)
-    return
-  }
-
-  savingUseList.innerHTML = data.map(item => `
-    <div class="item">
-      <b>${item.from_save} → ${item.to_target}</b><br>
-      ${item.date_use} | ${formatRupiah(item.amount)}
-      <br>
-      Note: ${item.note || '-'}
-      <br>
-      Periodic: ${item.periodic_date || '-'}
-      <br><br>
-      <button class="danger-btn" data-delete-saving-use="${item.id}">
-        Hapus
-      </button>
-    </div>
-  `).join('')
-
-  document
-    .querySelectorAll('[data-delete-saving-use]')
-    .forEach(btn => {
-
-      btn.addEventListener('click', async () => {
-
-        if (!canWrite()) return
-
-        const id = btn.dataset.deleteSavingUse
-
-        const confirmDelete = confirm(
-          'Yakin hapus saving use ini?'
-        )
-
-        if (!confirmDelete) return
-
-        const { error } = await supabase
-          .from('saving_uses')
-          .delete()
-          .eq('id', id)
-          .eq('owner_id', getOwnerId())
-
-        if (error) {
-          alert('Gagal hapus saving use: ' + error.message)
-          console.error(error)
-          return
-        }
-
-        alert('Saving use berhasil dihapus')
-
-        loadSavings()
-        loadSavingUses()
-        notifyDataChanged()
-      })
-    })
-  document.querySelectorAll('[data-edit-saving-use]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const id = btn.dataset.editSavingUse
-
-      const { data, error } = await supabase
-        .from('saving_uses')
-        .select('*')
-        .eq('id', id)
-        .eq('owner_id', getOwnerId())
-        .single()
-
-      if (error) {
-        alert('Gagal ambil saving use: ' + error.message)
-        console.error(error)
-        return
-      }
-
-      document.querySelector('#date_use').value = data.date_use
-      document.querySelector('#from_save').value = data.from_save
-      document.querySelector('#to_target').value = data.to_target
-      document.querySelector('#amount_use').value = data.amount
-      document.querySelector('#note_use').value = data.note || ''
-
-      document.querySelector('#savingUseForm').dataset.editId = id
-    })
-  })
+let savingCache = []
+let editingId = null
+function resetSaving() {
+  editingId = null
+  const form = document.querySelector('#savingUseForm')
+  form?.reset()
+  document.querySelector('#date_use').value = formatDate(new Date())
+  document.querySelector('#cancelSavingEdit').hidden = true
 }
-
+export async function loadSavingUses() {
+  const list = document.querySelector('#savingUseList')
+  if (!list) return
+  try {
+    savingCache = await getSavingUses()
+    list.replaceChildren()
+    if (!savingCache.length) { list.textContent = 'Belum ada saving use.'; return }
+    for (const item of savingCache) {
+      const row = document.createElement('div'); row.className = 'item'
+      const detail = document.createElement('div')
+      detail.textContent = `${item.date_use} | ${item.from_save} → ${item.to_target} | ${formatRupiah(item.amount)} | ${item.note || '-'}`
+      const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'edit-btn'; edit.textContent = 'Edit'
+      edit.addEventListener('click', () => {
+        editingId = item.id
+        for (const [field, value] of Object.entries({ date_use: item.date_use, from_save: item.from_save, to_target: item.to_target, amount_use: item.amount, note_use: item.note || '' })) document.getElementById(field).value = value
+        document.querySelector('#cancelSavingEdit').hidden = false
+        document.querySelector('#savingUseForm').scrollIntoView({ behavior: 'smooth' })
+      })
+      const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'danger-btn'; remove.textContent = 'Hapus'
+      remove.addEventListener('click', async () => {
+        if (!window.confirm(`Hapus saving use ${formatRupiah(item.amount)}?`)) return
+        remove.disabled = true
+        try { await deleteSavingUse(item.id); if (editingId === item.id) resetSaving(); await Promise.all([loadSavings(), loadSavingUses()]); notifyDataChanged() }
+        catch (error) { window.alert(error.message); remove.disabled = false }
+      })
+      row.append(detail, edit, remove); list.append(row)
+    }
+  } catch (error) { list.textContent = `Gagal memuat saving use: ${error.message}` }
+}
 export function setupSavingEvents() {
-  document.querySelector('#savingUseForm')?.addEventListener('submit', e => {
-    e.preventDefault()
-    alert('Input MySQL belum diaktifkan sampai sinkronisasi terakhir selesai.')
+  const form = document.querySelector('#savingUseForm')
+  const status = document.querySelector('#savingStatus')
+  document.querySelector('#cancelSavingEdit').addEventListener('click', () => { resetSaving(); status.textContent = '' })
+  form.addEventListener('submit', async event => {
+    event.preventDefault()
+    const payload = {
+      date_use: document.querySelector('#date_use').value,
+      from_save: document.querySelector('#from_save').value,
+      to_target: document.querySelector('#to_target').value,
+      amount: document.querySelector('#amount_use').value,
+      note: document.querySelector('#note_use').value.trim(),
+    }
+    if (editingId) payload.id = editingId
+    const submit = form.querySelector('[type="submit"]'); submit.disabled = true
+    status.textContent = 'Menyimpan…'
+    try {
+      if (editingId) await updateSavingUse(payload)
+      else await createSavingUse(payload)
+      resetSaving(); status.textContent = 'Saving use berhasil disimpan.'
+      await Promise.all([loadSavings(), loadSavingUses()]); notifyDataChanged()
+    } catch (error) { status.textContent = `Gagal menyimpan: ${error.message}` }
+    finally { submit.disabled = false }
   })
   document.querySelector('#loadSaving')?.addEventListener('click', () => loadSavings().catch(console.error))
   document.querySelector('#loadSavingUses')?.addEventListener('click', () => loadSavingUses().catch(console.error))

@@ -56,3 +56,10 @@ export async function updateIncome(payload) {
 export async function deleteIncome(id) {
   return api('/api/incomes.php', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
 }
+
+export const createSavingUse = payload => api('/api/saving-uses.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+export const updateSavingUse = payload => api('/api/saving-uses.php', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+export const deleteSavingUse = id => api('/api/saving-uses.php', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+export const createWeeklyCheck = payload => api('/api/weekly-checks.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+export const updateWeeklyCheck = payload => api('/api/weekly-checks.php', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+export const deleteWeeklyCheck = id => api('/api/weekly-checks.php', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
