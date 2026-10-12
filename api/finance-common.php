@@ -53,3 +53,16 @@ function financeWriteGuard(): void {
     // Deliberately locked until final data synchronization and reconciliation.
     financeJson(423, ['error'=>'Penulisan MySQL dikunci sampai sinkronisasi akhir Supabase selesai']);
 }
+
+function financeRequireSameOrigin(): void {
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    $expected = 'https://anangi.daikoku.co.id';
+    if ($origin !== $expected) financeJson(403, ['error'=>'Origin tidak diizinkan']);
+}
+function financeText($value, int $max, bool $required = false): string {
+    if (!is_string($value)) financeJson(422, ['error'=>'Teks tidak valid']);
+    $value = trim($value);
+    if ($required && $value === '') financeJson(422, ['error'=>'Kolom wajib diisi']);
+    if (strlen($value) > $max) financeJson(422, ['error'=>'Teks terlalu panjang']);
+    return $value;
+}
