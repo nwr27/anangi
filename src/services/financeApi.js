@@ -46,3 +46,13 @@ export async function updateExpense(payload) {
 export async function deleteExpense(id) {
   return api('/api/expenses.php', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
 }
+
+export async function createIncome(payload) {
+  return api('/api/incomes.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+}
+export async function updateIncome(payload) {
+  return api('/api/incomes.php', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+}
+export async function deleteIncome(id) {
+  return api('/api/incomes.php', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+}

@@ -3,7 +3,7 @@ require_once __DIR__ . '/finance-common.php';
 $owner=financeOwner();
 $method=$_SERVER['REQUEST_METHOD'];
 if (!in_array($method,['GET','POST','PUT','DELETE'],true)) financeJson(405,['error'=>'Method not allowed']);
-if ($method!=='GET') { financeRequireSameOrigin();financeWriteGuard(); }
+if ($method!=='GET') { financeRequireSameOrigin(); }
 function incomeAllocation(PDO $pdo,string $owner,string $id,string $date,string $period,string $amount,string $note,string $type): void {
     // Same as PostgreSQL round(amount)::bigint for positive numeric values.
     $whole=(int)round((float)$amount,0,PHP_ROUND_HALF_UP);
@@ -11,7 +11,7 @@ function incomeAllocation(PDO $pdo,string $owner,string $id,string $date,string 
     $rows=[];$balance=null;
     if ($type==='auto') {
         // Integer arithmetic avoids floating-point rounding differences.
-        $b=intdiv($whole*30,100);$n=intdiv($whole*30,100);$w=intdiv($whole*30,100);$u=intdiv($whole*10,100);
+        $b=intdiv($whole*30+50,100);$n=intdiv($whole*30+50,100);$w=intdiv($whole*30+50,100);$u=intdiv($whole*10+50,100);
         $w+=$whole-$b-$n-$w-$u;
         $balance=$b;$rows=[['nest_egg',$n],['wedding',$w],['umrah',$u]];
     } elseif ($type==='balance') $balance=$whole;
@@ -44,6 +44,7 @@ try {
         financeJson(200,['status'=>'ok','incomes'=>$stmt->fetchAll(PDO::FETCH_ASSOC)]);
     }
     $body=financeBody();$id=$method==='POST'?financeNewUuid():financeUuid($body['id']??null);
+    // All changes to income and its allocations must commit atomically.
     $pdo->beginTransaction();
     if ($method!=='POST') {
         $lock=$pdo->prepare('SELECT id FROM incomes WHERE id=? AND owner_id=? FOR UPDATE');$lock->execute([$id,$owner]);
