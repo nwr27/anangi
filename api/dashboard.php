@@ -18,19 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 }
 
 
-startAnangiSession();
-
-echo json_encode([
-  'debug' => true,
-  'session_name' => session_name(),
-  'session_cookie_received' =>
-  isset($_COOKIE[session_name()]),
-  'session_active' =>
-  session_status() === PHP_SESSION_ACTIVE,
-  'owner_id' => $_SESSION['owner_id'] ?? null
-]);
-
-exit;
+$owner = requireAnangiUser();
 
 
 try {
