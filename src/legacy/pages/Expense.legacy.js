@@ -1,8 +1,5 @@
-import { getExpenses, getExpense, requireFinanceCutover } from '../../services/financeApi.js'
+import { getExpenses } from '../../services/financeApi.js'
 import { formatRupiah } from '../../utils/format.js'
-import { notifyDataChanged } from '../../utils/events.js'
-import { canWrite, getOwnerId } from '../../utils/auth.js'
-import { getPeriodEndWednesday } from '../../utils/period.js'
 
 let currentWeekStart = getThursdayStart(new Date())
 
@@ -59,8 +56,8 @@ export function expenseView() {
           <p id="expensePeriodLabel"></p>
         </div>
 
-        <button id="toggleExpenseForm">
-          + Tambah
+        <button id="toggleExpenseForm" type="button" disabled title="Input dinonaktifkan sampai sinkronisasi MySQL selesai">
+          + Tambah (Terkunci)
         </button>
       </div>
 
@@ -89,6 +86,12 @@ export function expenseView() {
       <div id="expenseList"></div>
     </section>
   `
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[char])
 }
 
 function formatDisplayDate(date) {
@@ -216,17 +219,17 @@ export async function loadExpenses() {
       : items.map(item => `
         <div class="expense-row compact-expense-row">
           <div class="expense-main">
-            <b class="expense-name" data-full-name="${item.expense_name}">
-              ${item.expense_name}
+            <b class="expense-name" data-full-name="${escapeHtml(item.expense_name)}">
+              ${escapeHtml(item.expense_name)}
             </b>
-            <span class="expense-code">${item.code || '-'}</span>
+            <span class="expense-code">${escapeHtml(item.code || '-')}</span>
           </div>
 
           <div class="expense-actions">
             <b>${formatRupiah(item.amount)}</b>
 
             <div class="expense-menu">
-              <button class="menu-btn" data-menu-expense="${item.id}">
+              <button class="menu-btn" type="button" disabled title="Edit dan hapus dinonaktifkan sampai sinkronisasi MySQL selesai" data-menu-expense="${item.id}">
                 ⋮
               </button>
 
@@ -274,59 +277,13 @@ function setupExpenseItemEvents() {
     })
   })
 
-  document.querySelectorAll('[data-delete-expense]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      if (!canWrite()) return
 
-      const id = btn.dataset.deleteExpense
-      const confirmDelete = confirm('Yakin hapus expense ini?')
-
-      if (!confirmDelete) return
-
-      alert('Penghapusan dinonaktifkan sampai sinkronisasi MySQL selesai.')
-    })
-  })
-
-  document.querySelectorAll('[data-edit-expense]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const id = btn.dataset.editExpense
-
-      alert('Pengeditan dinonaktifkan sampai sinkronisasi MySQL selesai.')
-      return
-
-      document.querySelector('#date_expense').value = data.date_expense
-      document.querySelector('#expense_name').value = data.expense_name
-      document.querySelector('#code').value = data.code || ''
-      document.querySelector('#amount').value = data.amount
-
-      document.querySelector('#expenseForm').dataset.editId = id
-
-      showExpenseForm()
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    })
-  })
 }
 
 export function setupExpenseEvents() {
-  const expenseForm = document.querySelector('#expenseForm')
-  const toggleExpenseForm = document.querySelector('#toggleExpenseForm')
-  const expenseFormContainer = document.querySelector('#expenseFormContainer')
   const prevWeek = document.querySelector('#prevWeek')
   const thisWeek = document.querySelector('#thisWeek')
   const nextWeek = document.querySelector('#nextWeek')
-
-  toggleExpenseForm.addEventListener('click', () => {
-    const isOpen = expenseFormContainer.classList.contains('show')
-    isOpen ? hideExpenseForm() : showExpenseForm()
-  })
-
-  expenseForm.addEventListener('submit', async (e) => {
-    e.preventDefault()
-
-    if (!canWrite()) return
-
-    alert('Penyimpanan dinonaktifkan sampai sinkronisasi MySQL selesai.')
-  })
 
   prevWeek.addEventListener('click', () => {
     currentWeekStart = addDays(currentWeekStart, -7)
