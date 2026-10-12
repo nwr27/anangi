@@ -3,7 +3,7 @@ require_once __DIR__ . '/finance-common.php';
 $owner = financeOwner();
 $method = $_SERVER['REQUEST_METHOD'];
 if (!in_array($method, ['GET','POST','PUT','DELETE'], true)) financeJson(405,['error'=>'Method not allowed']);
-if ($method !== 'GET') { financeRequireSameOrigin(); financeWriteGuard(); }
+if ($method !== 'GET') { financeRequireSameOrigin(); }
 try {
     $pdo = getDatabase();
     if ($method === 'GET') {

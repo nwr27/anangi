@@ -36,3 +36,13 @@ export async function getWeeklyChecks() {
 export async function getWeeklyAudit() {
   return (await api('/api/periodic.php')).periods
 }
+
+export async function createExpense(payload) {
+  return api('/api/expenses.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+}
+export async function updateExpense(payload) {
+  return api('/api/expenses.php', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+}
+export async function deleteExpense(id) {
+  return api('/api/expenses.php', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+}

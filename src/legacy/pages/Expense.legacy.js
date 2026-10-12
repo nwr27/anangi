@@ -1,7 +1,9 @@
-import { getExpenses } from '../../services/financeApi.js'
+import { getExpenses, createExpense, updateExpense, deleteExpense } from '../../services/financeApi.js'
 import { formatRupiah } from '../../utils/format.js'
 
 let currentWeekStart = getThursdayStart(new Date())
+let expenseCache = []
+let editingExpenseId = null
 
 function formatDate(date) {
   const year = date.getFullYear()
@@ -56,13 +58,14 @@ export function expenseView() {
           <p id="expensePeriodLabel"></p>
         </div>
 
-        <button id="toggleExpenseForm" type="button" disabled title="Input dinonaktifkan sampai sinkronisasi MySQL selesai">
-          + Tambah (Terkunci)
+        <button id="toggleExpenseForm" type="button" >
+          + Tambah
         </button>
       </div>
 
       <div id="expenseFormContainer" class="hidden-form">
         <form id="expenseForm">
+          <p id="expenseFormStatus" role="status" aria-live="polite"></p>
           <input
             type="date"
             id="date_expense"
@@ -72,7 +75,8 @@ export function expenseView() {
           <input type="text" id="expense_name" placeholder="Nama pengeluaran" required />
           <input type="text" id="code" placeholder="Kode, contoh ED/TP/HL" value="ED" required />
           <input type="number" id="amount" placeholder="Nominal" required />
-          <button type="submit">Simpan Expense</button>
+          <button type="submit" id="expenseSubmit">Simpan Expense</button>
+          <button type="button" id="expenseCancel">Batal</button>
         </form>
       </div>
 
@@ -129,6 +133,7 @@ export async function loadExpenses() {
     return
   }
 
+  expenseCache = data
   const today = formatDate(new Date())
 
   const weekDays = Array.from({ length: 7 }, (_, index) => {
@@ -229,7 +234,7 @@ export async function loadExpenses() {
             <b>${formatRupiah(item.amount)}</b>
 
             <div class="expense-menu">
-              <button class="menu-btn" type="button" disabled title="Edit dan hapus dinonaktifkan sampai sinkronisasi MySQL selesai" data-menu-expense="${item.id}">
+              <button class="menu-btn" type="button" data-menu-expense="${item.id}">
                 ⋮
               </button>
 
@@ -276,11 +281,77 @@ function setupExpenseItemEvents() {
       menu.classList.toggle('hidden')
     })
   })
-
-
+  document.querySelectorAll('[data-edit-expense]').forEach(btn => btn.addEventListener('click', () => {
+    const item = expenseCache.find(row => row.id === btn.dataset.editExpense)
+    if (!item) return
+    editingExpenseId = item.id
+    document.querySelector('#date_expense').value = item.date_expense
+    document.querySelector('#expense_name').value = item.expense_name
+    document.querySelector('#code').value = item.code || ''
+    document.querySelector('#amount').value = item.amount
+    document.querySelector('#expenseSubmit').textContent = 'Simpan Perubahan'
+    document.querySelector('#expenseFormStatus').textContent = ''
+    showExpenseForm()
+    document.querySelector('#expenseFormContainer').scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }))
+  document.querySelectorAll('[data-delete-expense]').forEach(btn => btn.addEventListener('click', async () => {
+    const item = expenseCache.find(row => row.id === btn.dataset.deleteExpense)
+    if (!item || !window.confirm(`Hapus pengeluaran "${item.expense_name}" sebesar ${formatRupiah(item.amount)}?`)) return
+    btn.disabled = true
+    try {
+      await deleteExpense(item.id)
+      await loadExpenses()
+    } catch (error) {
+      window.alert(`Gagal menghapus: ${error.message}`)
+      btn.disabled = false
+    }
+  }))
 }
 
 export function setupExpenseEvents() {
+  const form = document.querySelector('#expenseForm')
+  const toggle = document.querySelector('#toggleExpenseForm')
+  const cancel = document.querySelector('#expenseCancel')
+  const resetForm = () => {
+    editingExpenseId = null
+    form.reset()
+    document.querySelector('#date_expense').value = formatDate(new Date())
+    document.querySelector('#code').value = 'ED'
+    document.querySelector('#expenseSubmit').textContent = 'Simpan Expense'
+    document.querySelector('#expenseFormStatus').textContent = ''
+    hideExpenseForm()
+  }
+  toggle.addEventListener('click', () => {
+    if (document.querySelector('#expenseFormContainer').classList.contains('show')) resetForm()
+    else showExpenseForm()
+  })
+  cancel.addEventListener('click', resetForm)
+  form.addEventListener('submit', async event => {
+    event.preventDefault()
+    const submit = document.querySelector('#expenseSubmit')
+    const status = document.querySelector('#expenseFormStatus')
+    const payload = {
+      date_expense: document.querySelector('#date_expense').value,
+      expense_name: document.querySelector('#expense_name').value.trim(),
+      code: document.querySelector('#code').value.trim().toUpperCase(),
+      amount: document.querySelector('#amount').value
+    }
+    if (editingExpenseId) payload.id = editingExpenseId
+    submit.disabled = true
+    status.textContent = 'Menyimpan…'
+    try {
+      if (editingExpenseId) await updateExpense(payload)
+      else await createExpense(payload)
+      const savedDate = parseLocalDate(payload.date_expense)
+      currentWeekStart = getThursdayStart(savedDate)
+      resetForm()
+      await loadExpenses()
+    } catch (error) {
+      status.textContent = `Gagal menyimpan: ${error.message}`
+    } finally {
+      submit.disabled = false
+    }
+  })
   const prevWeek = document.querySelector('#prevWeek')
   const thisWeek = document.querySelector('#thisWeek')
   const nextWeek = document.querySelector('#nextWeek')
