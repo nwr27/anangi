@@ -51,11 +51,19 @@ export default function Dashboard({ onLogout, currentUser }) {
       if (dashboard.status !== 'ok' || periodic.status !== 'ok') {
         throw new Error('Respons API tidak valid')
       }
+      if (!dashboard.summary || !Array.isArray(dashboard.expense_stats) || !Array.isArray(periodic.periods)) {
+        throw new Error('Data API belum lengkap (summary, expense_stats, periods)')
+      }
       setSummary(dashboard.summary)
-      setPeriods(periodic.periods || [])
-      setExpenseStats(dashboard.expense_stats || [])
+      setPeriods(periodic.periods)
+      setExpenseStats(dashboard.expense_stats)
+      setWeeklyOffset(0)
     } catch (error) {
       console.error(error)
+      // Jangan tampilkan saldo lama sebagai saldo terbaru jika refresh gagal.
+      setSummary(null)
+      setPeriods([])
+      setExpenseStats([])
       setSummaryError(`Gagal mengambil data MySQL: ${error.message}`)
       setWeeklyError('Gagal mengambil audit mingguan.')
     }
