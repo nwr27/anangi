@@ -19,12 +19,9 @@ startAnangiSession();
 
 $input = json_decode(file_get_contents('php://input'), true);
 
-$owner = $input['owner_id'] ?? null;
-$password = $input['password'] ?? null;
+$password = is_array($input) ? ($input['password'] ?? null) : null;
 
 if (
-  !is_string($owner) ||
-  !in_array($owner, ['nana', 'meysa'], true) ||
   !is_string($password) ||
   $password === ''
 ) {
@@ -38,7 +35,7 @@ try {
 
   // A database row lock serializes login attempts for the same account and IP.
   $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-  $key = hash('sha256', $owner . '|' . $ip);
+  $key = hash('sha256', 'password-login|' . $ip);
   $pdo->beginTransaction();
   $pdo->prepare('INSERT IGNORE INTO login_attempts (attempt_key, failed_count, window_start) VALUES (?,0,NOW())')->execute([$key]);
   $rate = $pdo->prepare('SELECT failed_count, window_start FROM login_attempts WHERE attempt_key=? FOR UPDATE');
@@ -55,16 +52,20 @@ try {
     exit;
   }
 
-  $stmt = $pdo->prepare(
-    'SELECT password_hash
-         FROM app_users
-         WHERE owner_id = ?'
-  );
+  // Determine identity server-side. Never expose account hashes to the browser.
+  $stmt = $pdo->query("SELECT owner_id, password_hash FROM app_users WHERE owner_id IN ('nana', 'meysa')");
+  $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+  $owner = null;
+  $matches = 0;
+  foreach ($users as $user) {
+    if (password_verify($password, $user['password_hash'])) {
+      $owner = $user['owner_id'];
+      $matches++;
+    }
+  }
 
-  $stmt->execute([$owner]);
-  $hash = $stmt->fetchColumn();
-
-  if (!$hash || !password_verify($password, $hash)) {
+  // Reject ambiguous credentials if both accounts use the same password.
+  if ($matches !== 1) {
     $pdo->prepare('UPDATE login_attempts SET failed_count=failed_count+1 WHERE attempt_key=?')->execute([$key]);
     $pdo->commit();
     http_response_code(401);

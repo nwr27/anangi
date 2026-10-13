@@ -13,7 +13,6 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [currentUser, setCurrentUser] = useState(null)
-  const [ownerId, setOwnerId] = useState('nana')
   const [password, setPassword] = useState('')
   const [page, setPage] = useState('dashboard')
   const [error, setError] = useState('')
@@ -32,7 +31,7 @@ export default function App() {
     setBusy(true)
     setError('')
     try {
-      const user = await login(ownerId, password)
+      const user = await login(password)
       setCurrentUser(user)
       setPassword('')
     } catch (err) {
@@ -63,11 +62,6 @@ export default function App() {
         <form className={styles.loginCard} onSubmit={handleLogin}>
           <h1>Anangi App</h1>
           <p>Masuk menggunakan akun Anangi</p>
-          <label htmlFor="owner">Akun</label>
-          <select id="owner" value={ownerId} onChange={e => setOwnerId(e.target.value)} disabled={busy}>
-            <option value="nana">NANA</option>
-            <option value="meysa">MEYSA</option>
-          </select>
           <label htmlFor="password">Password</label>
           <input id="password" type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required disabled={busy} />
           <button type="submit" disabled={busy}>{busy ? 'Memproses...' : 'Masuk'}</button>

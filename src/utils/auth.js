@@ -28,11 +28,11 @@ export async function checkSession() {
   return currentUser
 }
 
-export async function login(ownerId, password) {
+export async function login(password) {
   const body = await request('/api/auth/login.php', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ owner_id: ownerId, username: ownerId, password }),
+    body: JSON.stringify({ password }),
   })
   // Validate the actual PHP session rather than trusting the login response.
   const user = await checkSession()
