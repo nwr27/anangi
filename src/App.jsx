@@ -69,10 +69,9 @@ export default function App() {
       <div className={styles.loginShell}>
         <div className={styles.loginCard}>
           <h1>Anangi App</h1>
-          <p>Masuk menggunakan akun Anangi</p>
           <label htmlFor="password">Password</label>
           <input id="password" type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required disabled={busy} />
-          <p>{busy ? 'Memeriksa password...' : 'Login otomatis setelah selesai mengetik'}</p>
+          <p>{busy ? 'Memeriksa password...' : ''}</p>
           <p role="alert" className={styles.loginError}>{error}</p>
         </div>
       </div>

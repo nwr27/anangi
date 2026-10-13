@@ -13,7 +13,7 @@ export function incomeView() {
   return `
     <section class="card">
       <h2>Income</h2>
-      <p class="form-help">Alokasi otomatis: Balance 30%, Nest Egg 30%, Wedding 30%, Umrah 10%.</p>
+      <p class="form-help">Anjay dapet duit dari siapa nich?</p>
       <form id="incomeForm">
         <input type="date" id="date_income" value="${today()}" required />
         <input type="number" id="amount_income" min="1" step="1" placeholder="Nominal income" required />

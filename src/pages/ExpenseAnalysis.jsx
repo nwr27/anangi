@@ -127,7 +127,6 @@ export default function ExpenseAnalysis() {
   return (
     <main className={styles.page}>
       <div className={styles.header}>
-        <div><h2>Analisis Expense</h2><p>Telusuri dana talang NMI, biaya keluarga, dan biaya pribadi.</p></div>
         <button onClick={loadExpenses}>Refresh</button>
       </div>
 

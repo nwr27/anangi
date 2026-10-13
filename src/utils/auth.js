@@ -36,7 +36,7 @@ export async function login(password) {
   })
   // Validate the actual PHP session rather than trusting the login response.
   const user = await checkSession()
-  if (!user) throw new Error(body.error || 'Login belum menghasilkan session aktif')
+  if (!user) throw new Error(body.error || 'Lu siapa?')
   return user
 }
 
