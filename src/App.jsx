@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import styles from './App.module.css'
 import Navbar from './components/Navbar.jsx'
 import Dashboard from './pages/Dashboard.jsx'
@@ -17,6 +17,7 @@ export default function App() {
   const [page, setPage] = useState('dashboard')
   const [error, setError] = useState('')
   const [quickAddToken, setQuickAddToken] = useState(0)
+  const attemptedPassword = useRef('')
 
   useEffect(() => {
     let mounted = true
@@ -26,20 +27,27 @@ export default function App() {
     return () => { mounted = false }
   }, [])
 
-  async function handleLogin(event) {
-    event.preventDefault()
-    setBusy(true)
-    setError('')
-    try {
-      const user = await login(password)
-      setCurrentUser(user)
-      setPassword('')
-    } catch (err) {
-      setError(err.message || 'Login gagal')
-    } finally {
-      setBusy(false)
-    }
-  }
+  useEffect(() => {
+    if (loading || currentUser || busy || password.length < 4) return
+    if (attemptedPassword.current === password) return
+
+    const timer = setTimeout(async () => {
+      attemptedPassword.current = password
+      setBusy(true)
+      setError('')
+      try {
+        const user = await login(password)
+        setCurrentUser(user)
+        setPassword('')
+      } catch (err) {
+        setError(err.message || 'Password tidak cocok')
+      } finally {
+        setBusy(false)
+      }
+    }, 1200)
+
+    return () => clearTimeout(timer)
+  }, [password, loading, currentUser, busy])
 
   async function handleLogout() {
     setBusy(true)
@@ -59,14 +67,14 @@ export default function App() {
   if (!currentUser) {
     return (
       <div className={styles.loginShell}>
-        <form className={styles.loginCard} onSubmit={handleLogin}>
+        <div className={styles.loginCard}>
           <h1>Anangi App</h1>
           <p>Masuk menggunakan akun Anangi</p>
           <label htmlFor="password">Password</label>
           <input id="password" type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required disabled={busy} />
-          <button type="submit" disabled={busy}>{busy ? 'Memproses...' : 'Masuk'}</button>
+          <p>{busy ? 'Memeriksa password...' : 'Login otomatis setelah selesai mengetik'}</p>
           <p role="alert" className={styles.loginError}>{error}</p>
-        </form>
+        </div>
       </div>
     )
   }
