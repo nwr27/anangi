@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { formatRupiah } from '../utils/format.js'
+import { updateExpense } from '../services/financeApi.js'
 import styles from './ExpenseAnalysis.module.css'
 
 function normalizeCode(code) {
@@ -28,6 +29,9 @@ export default function ExpenseAnalysis() {
   const [code, setCode] = useState('all')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [editing, setEditing] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [editError, setEditError] = useState('')
 
   const loadExpenses = useCallback(async () => {
     setLoading(true)
@@ -76,6 +80,34 @@ export default function ExpenseAnalysis() {
     const personal = filtered.filter(item => getClassification(item.code) === 'personal').reduce((sum, item) => sum + Number(item.amount || 0), 0)
     return { total, nmi, fm, personal }
   }, [filtered])
+
+  function openEdit(item) {
+    setEditing({
+      id: item.id,
+      date_expense: item.date_expense,
+      expense_name: item.expense_name || '',
+      code: normalizeCode(item.code) === 'UNKNOWN' ? '' : normalizeCode(item.code),
+      amount: String(item.amount ?? ''),
+    })
+    setEditError('')
+  }
+
+  async function saveEdit(event) {
+    event.preventDefault()
+    if (!editing || saving) return
+    setSaving(true)
+    setEditError('')
+    try {
+      await updateExpense(editing)
+      setEditing(null)
+      await loadExpenses()
+      window.dispatchEvent(new Event('finance:data-changed'))
+    } catch (err) {
+      setEditError(err.message || 'Gagal menyimpan perubahan')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   function chooseClassification(next) {
     setClassification(next)
@@ -139,11 +171,34 @@ export default function ExpenseAnalysis() {
             <div className={styles.main}><b>{item.expense_name}</b><span>{classificationLabel(getClassification(item.code))}</span></div>
             <span className={styles.code}>{normalizeCode(item.code)}</span>
             <b className={styles.amount}>{formatRupiah(item.amount)}</b>
-            <button className={styles.editButton} type="button" disabled title="Edit dikunci sampai sinkronisasi final MySQL">Edit</button>
+            <button className={styles.editButton} type="button" onClick={() => openEdit(item)}>Edit</button>
           </div>)}
         </div>
       </section>
 
+
+      {editing && (
+        <div className={styles.modalBackdrop} onMouseDown={e => { if (e.target === e.currentTarget && !saving) setEditing(null) }}>
+          <form className={styles.editModal} onSubmit={saveEdit} aria-label="Edit pengeluaran">
+            <div className={styles.modalHeader}>
+              <div><h3>Edit Pengeluaran</h3><span>Perubahan akan disimpan ke database Anangi.</span></div>
+              <button type="button" className={styles.closeButton} onClick={() => setEditing(null)} disabled={saving} aria-label="Tutup">✕</button>
+            </div>
+            <label>Tanggal<input type="date" required value={editing.date_expense} disabled={saving} onChange={e => setEditing(v => ({ ...v, date_expense: e.target.value }))} /></label>
+            <label>Keterangan<input type="text" required maxLength={2000} value={editing.expense_name} disabled={saving} onChange={e => setEditing(v => ({ ...v, expense_name: e.target.value }))} /></label>
+            <label>Kode<select required value={editing.code} disabled={saving} onChange={e => setEditing(v => ({ ...v, code: e.target.value }))}>
+              <option value="">Pilih kode</option>
+              {[...new Set([...codes, editing.code])].filter(Boolean).sort().map(c => <option key={c} value={c}>{c}</option>)}
+            </select></label>
+            <label>Nominal (Rp)<input type="number" required min="1" step="1" value={editing.amount} disabled={saving} onChange={e => setEditing(v => ({ ...v, amount: e.target.value }))} /></label>
+            {editError && <p className={styles.error} role="alert">{editError}</p>}
+            <div className={styles.modalActions}>
+              <button type="button" className={styles.secondary} disabled={saving} onClick={() => setEditing(null)}>Batal</button>
+              <button type="submit" disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan Perubahan'}</button>
+            </div>
+          </form>
+        </div>
+      )}
 
     </main>
   )
