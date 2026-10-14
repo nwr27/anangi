@@ -1,9 +1,24 @@
 async function api(path, options = {}) {
-  const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store', ...options })
+  const response = await fetch(path, {
+    credentials: 'same-origin',
+    cache: 'no-store',
+    ...options,
+  })
+
   const data = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`)
+
+  if (response.status === 401) {
+    window.dispatchEvent(new Event('anangi:session-expired'))
+    throw new Error('Sesi login berakhir')
+  }
+
+  if (!response.ok) {
+    throw new Error(data.error || `HTTP ${response.status}`)
+  }
+
   return data
 }
+
 export async function getExpenses(from, to) {
   const query = new URLSearchParams({ from, to })
   return (await api(`/api/expenses.php?${query}`)).expenses

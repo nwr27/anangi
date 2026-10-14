@@ -19,6 +19,29 @@ export default function App() {
   const [quickAddToken, setQuickAddToken] = useState(0)
   const attemptedPassword = useRef('')
 
+
+  useEffect(() => {
+    function handleSessionExpired() {
+      setCurrentUser(null)
+      setPassword('')
+      setError('Sesi berakhir. Silakan login kembali.')
+      setPage('dashboard')
+    }
+
+    window.addEventListener(
+      'anangi:session-expired',
+      handleSessionExpired
+    )
+
+    return () => {
+      window.removeEventListener(
+        'anangi:session-expired',
+        handleSessionExpired
+      )
+    }
+  }, [])
+
+
   useEffect(() => {
     let mounted = true
     checkSession().then(user => {
