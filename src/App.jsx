@@ -7,7 +7,12 @@ import Income from './pages/Income.jsx'
 import Saving from './pages/Saving.jsx'
 import Weekly from './pages/Weekly.jsx'
 import ExpenseAnalysis from './pages/ExpenseAnalysis.jsx'
-import { checkSession, login, logout } from './utils/auth.js'
+import {
+  checkSession,
+  login,
+  logout,
+  clearAuthState
+} from './utils/auth.js'
 
 export default function App() {
   const [loading, setLoading] = useState(true)
@@ -22,6 +27,8 @@ export default function App() {
 
   useEffect(() => {
     function handleSessionExpired() {
+      clearAuthState()
+      attemptedPassword.current = ''
       setCurrentUser(null)
       setPassword('')
       setError('Sesi berakhir. Silakan login kembali.')

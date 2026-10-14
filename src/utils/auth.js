@@ -52,3 +52,7 @@ export function getCurrentUser() { return currentUser }
 export function getOwnerId() { return currentUser?.id || null }
 export function isLoggedIn() { return Boolean(currentUser) }
 export function canWrite() { return Boolean(currentUser) }
+
+export function clearAuthState() {
+  currentUser = null
+}
